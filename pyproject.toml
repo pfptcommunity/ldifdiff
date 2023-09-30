@@ -1,0 +1,27 @@
+[build-system]
+requires=['setuptools', 'setuptools-scm']
+build-backend="setuptools.build_meta"
+
+[tools.setuptools.packages.find]
+where = ["src"]
+
+[project]
+name = "ldifdiff"
+version = "1.0.0"
+readme = "README.md"
+description = "Tool for comparing LDIF files"
+license = { text = "MIT" }
+requires-python = ">3.9"
+dependencies = [
+    'ldif',
+    'colorama'
+]
+
+[project.urls]
+repository = "https://github.com/pfptcommunity/ldifdiff"
+#homepage = "https://github.com/pfptcommunity/ldifdiff"
+#documentation = "https://github.com/pfptcommunity/ldifdiff"
+#changelog = "https://github.com/pfptcommunity/ldifdiff"
+
+[project.scripts]
+ldifdiff = "ldifdiff:main"
