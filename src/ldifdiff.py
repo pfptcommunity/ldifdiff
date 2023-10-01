@@ -235,12 +235,16 @@ def main():
                                      description="""Tool for comparing LDIF files""",
                                      formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=80))
 
-    parser.add_argument('-o', '--output', dest="output")
-    parser.add_argument('-a', '--added', dest="added", action='store_true')
-    parser.add_argument('-d', '--deleted', dest="deleted", action='store_true')
-    parser.add_argument('-e', '--equal', dest="equal", action='store_true')
-    parser.add_argument('-c', '--color', dest="color", action='store_true')
-    parser.add_argument('files', nargs=2)
+    parser.add_argument('-o', '--output', dest="output", metavar='outfile',
+                        help='File for output by default data is written to console')
+    parser.add_argument('-a', '--added', dest="added", action='store_true',
+                        help='Show items added to right file')
+    parser.add_argument('-d', '--deleted', dest="deleted", action='store_true',
+                        help='Show items deleted from left file')
+    parser.add_argument('-e', '--equal', dest="equal", action='store_true',
+                        help='Show items that are the same in both')
+    parser.add_argument('-c', '--color', dest="color", action='store_true', help='Colorize the output')
+    parser.add_argument('files', nargs=2, help='Two files to compare')
 
     args = parser.parse_args()
 
