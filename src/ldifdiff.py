@@ -4,7 +4,6 @@ from enum import Enum
 import sys
 import argparse
 from typing import Dict, TextIO, List, Union
-
 from colorama.ansi import AnsiFore
 from ldif import LDIFParser
 from colorama import Fore
@@ -25,7 +24,6 @@ def get_ldif_dict(filename):
             ldif_data[dn] = record
         ldif_file.close()
     return ldif_data
-
 
 class ElDiffPrinter:
     __stream: TextIO
@@ -142,6 +140,16 @@ class ElDiffPrinter:
         except AttributeError:
             print("Error: 'stream' object does not support writing.")
 
+    def __key_search(self, haystack: Dict, keys_to_find: List):
+        for k in keys_to_find:
+            if k in haystack:
+                return True
+        for value in haystack.values():
+            if isinstance(value, dict):
+                # If a value is itself a dictionary, recursively search within it
+                if self.__key_search(value, keys_to_find):
+                    return True
+        return False
     def __print_attr(self, diff: Dict, attribute: str = ''):
         for action in diff:
             if isinstance(diff[action], dict):
@@ -158,14 +166,18 @@ class ElDiffPrinter:
                         self.__write(action, '{}: {}'.format(attribute, v))
 
     def print_diff(self, diff: Dict):
-        all_off = all(not value for value in self.__action_display.values())
-        if all_off:
-            return
         for action in diff:
-            if self.__action_display[action]:
-                for entry, subdata in diff[action].items():
+            for entry, data in diff[action].items():
+                special_case = False
+                # Special case to show dn value, when show equal is off
+                if not self.__action_display['=']:
+                    has_added = self.__key_search(data, ['+'])
+                    has_removed = self.__key_search(data, ['-'])
+                    special_case = (self.__action_display['+'] and has_added or self.__action_display['-'] and has_removed)
+
+                if self.__action_display[action] or special_case:
                     self.__write(action, '{}: {}'.format('dn', entry))
-                    self.__print_attr(subdata)
+                    self.__print_attr(data)
                     self.__write()
 
 
@@ -178,9 +190,13 @@ def compare_array(l: List, r: List) -> Dict:
     dv = lv - rv
     cv = lv.intersection(rv)
 
-    diff['+'] = sorted(av)
-    diff['-'] = sorted(dv)
-    diff['='] = sorted(cv)
+    if sorted(av):
+        diff['+'] = sorted(av)
+    if sorted(dv):
+        diff['-'] = sorted(dv)
+    if sorted(cv):
+        diff['='] = sorted(cv)
+
     return diff
 
 
@@ -193,16 +209,18 @@ def compare_dict(l: Dict, r: Dict) -> Dict:
     dk = lk - rk
     ck = lk.intersection(rk)
 
-    diff['+'] = {k: {'+': r[k]} for k in sorted(ak)}
-    diff['-'] = {k: {'-': l[k]} for k in sorted(dk)}
-    diff['='] = {}
-    for k in sorted(ck):
-        if isinstance(l[k], dict):
-            diff['='][k] = compare_dict(l[k], r[k])
-        else:
-            diff['='][k] = compare_array(l[k], r[k])
+    if sorted(ak):
+        diff['+'] = {k: {'+': r[k]} for k in sorted(ak)}
+    if sorted(dk):
+        diff['-'] = {k: {'-': l[k]} for k in sorted(dk)}
+    if sorted(ck):
+        diff['='] = {}
+        for k in sorted(ck):
+            if isinstance(l[k], dict):
+                diff['='][k] = compare_dict(l[k], r[k])
+            else:
+                diff['='][k] = compare_array(l[k], r[k])
     return diff
-
 
 def main():
     if len(sys.argv) == 1:
@@ -217,7 +235,7 @@ def main():
     parser.add_argument('-a', '--added', dest="added", action='store_true')
     parser.add_argument('-d', '--deleted', dest="deleted", action='store_true')
     parser.add_argument('-e', '--equal', dest="equal", action='store_true')
-    parser.add_argument('-c','--color', dest="color", action='store_true')
+    parser.add_argument('-c', '--color', dest="color", action='store_true')
     parser.add_argument('files', nargs=2)
 
     args = parser.parse_args()
@@ -226,8 +244,6 @@ def main():
     ldif_right = get_ldif_dict(args.files[1])
 
     diff = compare_dict(ldif_left, ldif_right)
-
-    # print(json.dumps(diff,indent=3))
 
     printer = ElDiffPrinter()
     printer.colors = args.color
@@ -245,6 +261,7 @@ def main():
             printer.print_diff(diff)
     else:
         printer.print_diff(diff)
+
 
 # Main entry point of program
 if __name__ == '__main__':
