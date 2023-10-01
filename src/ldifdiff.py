@@ -3,15 +3,12 @@ import json
 from enum import Enum
 import sys
 import argparse
-from typing import Dict, TextIO
+from typing import Dict, TextIO, List, Union
+
+from colorama.ansi import AnsiFore
 from ldif import LDIFParser
 from colorama import Fore
 
-
-class DiffType(Enum):
-    RIGHT = '[-->] '
-    LEFT = '[<--] '
-    COMMON = '[<->] '
 
 class LDIFParserNoError(LDIFParser):
     # Remove annoying warnings
@@ -30,139 +27,182 @@ def get_ldif_dict(filename):
     return ldif_data
 
 
-def write_to_stream(message: str = '', diff_type: DiffType = DiffType.COMMON, stream: TextIO = None):
-    format = ''
-    message.strip()
+class ElDiffPrinter:
+    __stream: TextIO
+    __action_symbols: Dict
+    __action_colors: Dict
+    __action_display: Dict
+    __colors: bool
 
-    if message:
-        format = diff_type.value
+    def __init__(self, stream: TextIO = sys.stdout):
+        self.__symbol_colors = None
+        self.__stream = stream
+        self.__action_symbols = {'+': '<+> ', '-': '<-> ', '=': '<=> '}
+        self.__action_colors = {'+': Fore.GREEN, '-': Fore.RED, '=': Fore.WHITE}
+        self.__action_display = {'+': True, '-': True, '=': True}
+        self.__colors = False
 
-    if stream is None:
-        stream = sys.stdout
-        if diff_type == DiffType.RIGHT:
-            format = Fore.GREEN + format
-        elif diff_type == DiffType.LEFT:
-            format = Fore.RED + format
-        elif diff_type == DiffType.COMMON:
-            format = Fore.WHITE + format
+    def set_stream(self, stream: TextIO):
+        self.__stream = stream
 
-    try:
-        stream.write("{}{}\n".format(format, message))
-    except AttributeError:
-        print("Error: 'stream' object does not support writing.")
+    @property
+    def added_symbol(self) -> str:
+        return self.__action_symbols['+']
+
+    @property
+    def deleted_symbol(self) -> str:
+        return self.__action_symbols['-']
+
+    @property
+    def equals_symbol(self) -> str:
+        return self.__action_symbols['=']
+
+    @added_symbol.setter
+    def added_symbol(self, symbol: str):
+        self.__action_symbols['+'] = symbol
+
+    @deleted_symbol.setter
+    def deleted_symbol(self, symbol: str):
+        self.__action_symbols['-'] = symbol
+
+    @equals_symbol.setter
+    def equals_symbol(self, symbol: str):
+        self.__action_symbols['='] = symbol
+
+    @property
+    def added_color(self) -> str:
+        return self.__action_colors['+']
+
+    @property
+    def deleted_color(self) -> str:
+        return self.__action_colors['-']
+
+    @property
+    def equals_color(self) -> str:
+        return self.__action_colors['=']
+
+    @added_color.setter
+    def added_color(self, color: str):
+        self.__action_colors['+'] = color
+
+    @deleted_color.setter
+    def deleted_color(self, color: str):
+        self.__action_colors['-'] = color
+
+    @equals_color.setter
+    def equals_color(self, color: str):
+        self.__action_colors['='] = color
+
+    @property
+    def added_display(self) -> bool:
+        return self.__action_display['+']
+
+    @property
+    def deleted_display(self) -> bool:
+        return self.__action_display['-']
+
+    @property
+    def equals_display(self) -> bool:
+        return self.__action_display['=']
+
+    @added_display.setter
+    def added_display(self, display: bool):
+        self.__action_display['+'] = display
+
+    @deleted_display.setter
+    def deleted_display(self, display: bool):
+        self.__action_display['-'] = display
+
+    @equals_display.setter
+    def equals_display(self, display: bool):
+        self.__action_display['='] = display
+
+    @property
+    def colors(self) -> bool:
+        return self.__colors
+
+    @colors.setter
+    def colors(self, colors: bool):
+        self.__colors = colors
+
+    def __write(self, action: str = None, message: str = ''):
+        message.strip()
+
+        symbol = self.__action_symbols.get(action, '')
+
+        color = ''
+
+        if self.__colors:
+            color = self.__action_colors.get(action, Fore.RESET)
+
+        format = color + symbol
+
+        try:
+            self.__stream.write("{}{}\n".format(format, message))
+        except AttributeError:
+            print("Error: 'stream' object does not support writing.")
+
+    def __print_attr(self, diff: Dict, attribute: str = ''):
+        for action in diff:
+            if isinstance(diff[action], dict):
+                for entry in diff[action]:
+                    if isinstance(diff[action][entry], dict):
+                        self.__print_attr(diff[action][entry], entry)
+                    else:
+                        if self.__action_display[action]:
+                            for v in diff[action][entry]:
+                                self.__write(action, '{}: {}'.format(entry, v))
+            else:
+                if self.__action_display[action]:
+                    for v in diff[action]:
+                        self.__write(action, '{}: {}'.format(attribute, v))
+
+    def print_diff(self, diff: Dict):
+        all_off = all(not value for value in self.__action_display.values())
+        if all_off:
+            return
+        for action in diff:
+            if self.__action_display[action]:
+                for entry, subdata in diff[action].items():
+                    self.__write(action, '{}: {}'.format('dn', entry))
+                    self.__print_attr(subdata)
+                    self.__write()
 
 
-def generate_text_output(el_diff: Dict, left: bool, right: bool, common: bool, stream: TextIO = None):
-    if right:
-        for dn, data in el_diff['right_dns'].items():
-            write_to_stream('dn: {}'.format(dn), DiffType.RIGHT, stream)
-            for k, v in data.items():
-                for e in v:
-                    write_to_stream('{}: {}'.format(k, e), DiffType.RIGHT, stream)
-            write_to_stream()
+def compare_array(l: List, r: List) -> Dict:
+    diff = {}
+    lv = set(l)
+    rv = set(r)
 
-    if left:
-        for dn, data in el_diff['left_dns'].items():
-            write_to_stream('dn: {}'.format(dn), DiffType.LEFT, stream)
-            for k, v in data.items():
-                for e in v:
-                    write_to_stream('{}: {}'.format(k, e), DiffType.LEFT, stream)
-            write_to_stream()
+    av = rv - lv
+    dv = lv - rv
+    cv = lv.intersection(rv)
+
+    diff['+'] = sorted(av)
+    diff['-'] = sorted(dv)
+    diff['='] = sorted(cv)
+    return diff
 
 
-    # If common DN doesn't contain any items.
+def compare_dict(l: Dict, r: Dict) -> Dict:
+    diff = {}
+    lk = set(l.keys())
+    rk = set(r.keys())
 
-    for dn, data in el_diff['common_dns'].items():
-        write_dn = False
-        if right:
-            for k, v in el_diff['common_dns'][dn]['added_keys'].items():
-                if not write_dn:
-                    write_to_stream('dn: {}'.format(dn), DiffType.COMMON, stream)
-                    write_dn = True
-                for e in v:
-                    write_to_stream('{}: {}'.format(k, e), DiffType.RIGHT, stream)
+    ak = rk - lk
+    dk = lk - rk
+    ck = lk.intersection(rk)
 
-        if left:
-            for k, v in el_diff['common_dns'][dn]['removed_keys'].items():
-                if not write_dn:
-                    write_to_stream('dn: {}'.format(dn), DiffType.COMMON, stream)
-                    write_dn = True
-                for e in v:
-                    write_to_stream('{}: {}'.format(k, e), DiffType.LEFT, stream)
+    diff['+'] = {k: {'+': r[k]} for k in sorted(ak)}
+    diff['-'] = {k: {'-': l[k]} for k in sorted(dk)}
+    diff['='] = {}
+    for k in sorted(ck):
+        if isinstance(l[k], dict):
+            diff['='][k] = compare_dict(l[k], r[k])
+        else:
+            diff['='][k] = compare_array(l[k], r[k])
+    return diff
 
-        if common:
-            if not write_dn:
-                write_to_stream('dn: {}'.format(dn), DiffType.COMMON, stream)
-                write_dn = True
-
-        for k, v in el_diff['common_dns'][dn]['common_keys'].items():
-            if right:
-                for e in el_diff['common_dns'][dn]['common_keys'][k]['added_values']:
-                    if not write_dn:
-                        write_to_stream('dn: {}'.format(dn), DiffType.COMMON, stream)
-                        write_dn = True
-                    write_to_stream('{}: {}'.format(k, e), DiffType.RIGHT, stream)
-            if left:
-                for e in el_diff['common_dns'][dn]['common_keys'][k]['removed_values']:
-                    if not write_dn:
-                        write_to_stream('dn: {}'.format(dn), DiffType.COMMON, stream)
-                        write_dn = True
-                    write_to_stream('{}: {}'.format(k, e), DiffType.LEFT, stream)
-            if common:
-                for e in el_diff['common_dns'][dn]['common_keys'][k]['common_values']:
-                    if not write_dn:
-                        write_to_stream('dn: {}'.format(dn), DiffType.COMMON, stream)
-                        write_dn = True
-                    write_to_stream('{}: {}'.format(k, e), DiffType.COMMON, stream)
-        if write_dn:
-            write_to_stream()
-
-
-def generate_diff_data(ldif_left: Dict, ldif_right: Dict) -> Dict:
-    ldif_result = {'left_dns': {}, 'right_dns': {}, 'common_dns': {}}
-
-    left_dns = set(list(ldif_left.keys()))
-    right_dns = set(list(ldif_right.keys()))
-
-    removed_dns = left_dns - right_dns
-    added_dns = right_dns - left_dns
-    common_dns = left_dns.intersection(right_dns)
-
-    # Added DNs (right only)
-    for dn in sorted(added_dns):
-        ldif_result['right_dns'][dn] = ldif_right[dn]
-
-    # Removed DNs (left only)
-    for dn in sorted(removed_dns):
-        ldif_result['left_dns'][dn] = ldif_left[dn]
-
-    # DNs on both lists
-    for dn in sorted(common_dns):
-        left_keys = set(ldif_left[dn].keys())
-        right_keys = set(ldif_right[dn].keys())
-        removed_keys = left_keys - right_keys
-        added_keys = right_keys - left_keys
-        common_keys = left_keys.intersection(right_keys)
-
-        ldif_result['common_dns'][dn] = {'added_keys': {}, 'removed_keys': {}, 'common_keys': {}}
-        for k in sorted(added_keys):
-            ldif_result['common_dns'][dn]['added_keys'][k] = ldif_right[dn][k]
-
-        for k in sorted(removed_keys):
-            ldif_result['common_dns'][dn]['removed_keys'][k] = ldif_left[dn][k]
-
-        for k in sorted(common_keys):
-            ldif_result['common_dns'][dn]['common_keys'][k] = {'added_values': [], 'removed_values': [],
-                                                               'common_values': []}
-            left_values = set(ldif_left[dn][k])
-            right_values = set(ldif_right[dn][k])
-            common_values = right_values.intersection(left_values)
-            removed_values = left_values - right_values
-            added_values = right_values - left_values
-            ldif_result['common_dns'][dn]['common_keys'][k]['added_values'] = sorted(added_values)
-            ldif_result['common_dns'][dn]['common_keys'][k]['removed_values'] = sorted(removed_values)
-            ldif_result['common_dns'][dn]['common_keys'][k]['common_values'] = sorted(common_values)
-    return ldif_result
 
 def main():
     if len(sys.argv) == 1:
@@ -174,11 +214,10 @@ def main():
                                      formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=80))
 
     parser.add_argument('-o', '--output', dest="output")
-    parser.add_argument('-l', '--left', dest="left", action='store_true')
-    parser.add_argument('-r', '--right', dest="right", action='store_true')
-    parser.add_argument('-c', '--common', dest="common", action='store_true')
-    parser.add_argument('--color', dest="color", action='store_true')
-
+    parser.add_argument('-a', '--added', dest="added", action='store_true')
+    parser.add_argument('-d', '--deleted', dest="deleted", action='store_true')
+    parser.add_argument('-e', '--equal', dest="equal", action='store_true')
+    parser.add_argument('-c','--color', dest="color", action='store_true')
     parser.add_argument('files', nargs=2)
 
     args = parser.parse_args()
@@ -186,14 +225,26 @@ def main():
     ldif_left = get_ldif_dict(args.files[0])
     ldif_right = get_ldif_dict(args.files[1])
 
-    el_diff = generate_diff_data(ldif_left, ldif_right)
+    diff = compare_dict(ldif_left, ldif_right)
+
+    # print(json.dumps(diff,indent=3))
+
+    printer = ElDiffPrinter()
+    printer.colors = args.color
+    if args.added or args.deleted or args.equal:
+        printer.added_display = False
+        printer.deleted_display = False
+        printer.equals_display = False
+        printer.added_display = args.added
+        printer.deleted_display = args.deleted
+        printer.equals_display = args.equal
 
     if args.output:
         with open(args.output, 'w', encoding='utf_8_sig') as file:
-            generate_text_output(el_diff, args.left, args.right, args.common, file)
+            printer.set_stream(file)
+            printer.print_diff(diff)
     else:
-        generate_text_output(el_diff, args.left, args.right, args.common)
-
+        printer.print_diff(diff)
 
 # Main entry point of program
 if __name__ == '__main__':
