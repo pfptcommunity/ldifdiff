@@ -9,22 +9,6 @@ from ldif import LDIFParser
 from colorama import Fore
 
 
-class LDIFParserNoError(LDIFParser):
-    # Remove annoying warnings
-    def _error(self, msg):
-        if self._strict:
-            raise ValueError(msg)
-
-
-def get_ldif_dict(filename):
-    ldif_data = {}
-    with open(filename, "rb") as ldif_file:
-        parser = LDIFParserNoError(ldif_file, strict=False)
-        for dn, record in parser.parse():
-            ldif_data[dn] = record
-        ldif_file.close()
-    return ldif_data
-
 class ElDiffPrinter:
     __stream: TextIO
     __action_symbols: Dict
@@ -150,6 +134,7 @@ class ElDiffPrinter:
                 if self.__key_search(value, keys_to_find):
                     return True
         return False
+
     def __print_attr(self, diff: Dict, attribute: str = ''):
         for action in diff:
             if isinstance(diff[action], dict):
@@ -173,12 +158,30 @@ class ElDiffPrinter:
                 if not self.__action_display['=']:
                     has_added = self.__key_search(data, ['+'])
                     has_removed = self.__key_search(data, ['-'])
-                    special_case = (self.__action_display['+'] and has_added or self.__action_display['-'] and has_removed)
+                    special_case = (self.__action_display['+'] and has_added or
+                                    self.__action_display['-'] and has_removed)
 
                 if self.__action_display[action] or special_case:
                     self.__write(action, '{}: {}'.format('dn', entry))
                     self.__print_attr(data)
                     self.__write()
+
+
+class LDIFParserNoError(LDIFParser):
+    # Remove annoying warnings
+    def _error(self, msg):
+        if self._strict:
+            raise ValueError(msg)
+
+
+def get_ldif_dict(filename):
+    ldif_data = {}
+    with open(filename, "rb") as ldif_file:
+        parser = LDIFParserNoError(ldif_file, strict=False)
+        for dn, record in parser.parse():
+            ldif_data[dn] = record
+        ldif_file.close()
+    return ldif_data
 
 
 def compare_array(l: List, r: List) -> Dict:
@@ -221,6 +224,7 @@ def compare_dict(l: Dict, r: Dict) -> Dict:
             else:
                 diff['='][k] = compare_array(l[k], r[k])
     return diff
+
 
 def main():
     if len(sys.argv) == 1:
