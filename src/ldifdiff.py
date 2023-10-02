@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-import json
-from enum import Enum
-import sys
 import argparse
-from typing import Dict, TextIO, List, Union
-from colorama.ansi import AnsiFore
-from ldif import LDIFParser
+import sys
+from typing import Dict, TextIO, List
+
 from colorama import Fore
+from ldif import LDIFParser
 
 
 class ElDiffPrinter:
@@ -19,84 +17,84 @@ class ElDiffPrinter:
     def __init__(self, stream: TextIO = sys.stdout):
         self.__symbol_colors = None
         self.__stream = stream
-        self.__action_symbols = {'+': '<+> ', '-': '<-> ', '=': '<=> '}
-        self.__action_colors = {'+': Fore.GREEN, '-': Fore.RED, '=': Fore.WHITE}
-        self.__action_display = {'+': True, '-': True, '=': True}
+        self.__action_symbols = {'>': '> ', '<': '< ', '=': '= '}
+        self.__action_colors = {'>': Fore.GREEN, '<': Fore.RED, '=': Fore.WHITE}
+        self.__action_display = {'>': True, '<': True, '=': True}
         self.__colors = False
 
     def set_stream(self, stream: TextIO):
         self.__stream = stream
 
     @property
-    def added_symbol(self) -> str:
-        return self.__action_symbols['+']
+    def right_symbol(self) -> str:
+        return self.__action_symbols['>']
+
+    @right_symbol.setter
+    def right_symbol(self, symbol: str):
+        self.__action_symbols['>'] = symbol
 
     @property
-    def deleted_symbol(self) -> str:
-        return self.__action_symbols['-']
+    def left_symbol(self) -> str:
+        return self.__action_symbols['<']
+
+    @left_symbol.setter
+    def left_symbol(self, symbol: str):
+        self.__action_symbols['<'] = symbol
 
     @property
-    def equals_symbol(self) -> str:
+    def common_symbol(self) -> str:
         return self.__action_symbols['=']
 
-    @added_symbol.setter
-    def added_symbol(self, symbol: str):
-        self.__action_symbols['+'] = symbol
-
-    @deleted_symbol.setter
-    def deleted_symbol(self, symbol: str):
-        self.__action_symbols['-'] = symbol
-
-    @equals_symbol.setter
-    def equals_symbol(self, symbol: str):
+    @common_symbol.setter
+    def common_symbol(self, symbol: str):
         self.__action_symbols['='] = symbol
 
     @property
-    def added_color(self) -> str:
-        return self.__action_colors['+']
+    def left_color(self) -> str:
+        return self.__action_colors['<']
+
+    @left_color.setter
+    def left_color(self, color: str):
+        self.__action_colors['<'] = color
 
     @property
-    def deleted_color(self) -> str:
-        return self.__action_colors['-']
+    def right_color(self) -> str:
+        return self.__action_colors['>']
+
+    @right_color.setter
+    def right_color(self, color: str):
+        self.__action_colors['>'] = color
 
     @property
-    def equals_color(self) -> str:
+    def common_color(self) -> str:
         return self.__action_colors['=']
 
-    @added_color.setter
-    def added_color(self, color: str):
-        self.__action_colors['+'] = color
-
-    @deleted_color.setter
-    def deleted_color(self, color: str):
-        self.__action_colors['-'] = color
-
-    @equals_color.setter
-    def equals_color(self, color: str):
+    @common_color.setter
+    def common_color(self, color: str):
         self.__action_colors['='] = color
 
     @property
-    def added_display(self) -> bool:
-        return self.__action_display['+']
+    def left_display(self) -> bool:
+        return self.__action_display['<']
+
+    @left_display.setter
+    def left_display(self, display: bool):
+        self.__action_display['<'] = display
 
     @property
-    def deleted_display(self) -> bool:
-        return self.__action_display['-']
+    def right_display(self) -> bool:
+        return self.__action_display['>']
+
+    @right_display.setter
+    def right_display(self, display: bool):
+        self.__action_display['>'] = display
 
     @property
-    def equals_display(self) -> bool:
+    def common_display(self) -> bool:
         return self.__action_display['=']
 
-    @added_display.setter
-    def added_display(self, display: bool):
-        self.__action_display['+'] = display
-
-    @deleted_display.setter
-    def deleted_display(self, display: bool):
-        self.__action_display['-'] = display
-
-    @equals_display.setter
-    def equals_display(self, display: bool):
+    @common_display.setter
+    def common_display(self, display: bool):
         self.__action_display['='] = display
 
     @property
@@ -156,10 +154,10 @@ class ElDiffPrinter:
                 special_case = False
                 # Special case to show dn value, when show equal is off
                 if not self.__action_display['=']:
-                    has_added = self.__key_search(data, ['+'])
-                    has_removed = self.__key_search(data, ['-'])
-                    special_case = (self.__action_display['+'] and has_added or
-                                    self.__action_display['-'] and has_removed)
+                    has_added = self.__key_search(data, ['>'])
+                    has_removed = self.__key_search(data, ['<'])
+                    special_case = (self.__action_display['>'] and has_added or
+                                    self.__action_display['<'] and has_removed)
 
                 if self.__action_display[action] or special_case:
                     self.__write(action, '{}: {}'.format('dn', entry))
@@ -189,16 +187,16 @@ def compare_array(l: List, r: List) -> Dict:
     lv = set(l)
     rv = set(r)
 
-    av = rv - lv
-    dv = lv - rv
-    cv = lv.intersection(rv)
+    left_only = lv - rv
+    right_only = rv - lv
+    common = lv.intersection(rv)
 
-    if sorted(av):
-        diff['+'] = sorted(av)
-    if sorted(dv):
-        diff['-'] = sorted(dv)
-    if sorted(cv):
-        diff['='] = sorted(cv)
+    if sorted(left_only):
+        diff['<'] = sorted(left_only)
+    if sorted(right_only):
+        diff['>'] = sorted(right_only)
+    if sorted(common):
+        diff['='] = sorted(common)
 
     return diff
 
@@ -208,17 +206,17 @@ def compare_dict(l: Dict, r: Dict) -> Dict:
     lk = set(l.keys())
     rk = set(r.keys())
 
-    ak = rk - lk
-    dk = lk - rk
-    ck = lk.intersection(rk)
+    left_only = lk - rk
+    right_only = rk - lk
+    common = lk.intersection(rk)
 
-    if sorted(ak):
-        diff['+'] = {k: {'+': r[k]} for k in sorted(ak)}
-    if sorted(dk):
-        diff['-'] = {k: {'-': l[k]} for k in sorted(dk)}
-    if sorted(ck):
+    if sorted(left_only):
+        diff['<'] = {k: {'<': l[k]} for k in sorted(left_only)}
+    if sorted(right_only):
+        diff['>'] = {k: {'>': r[k]} for k in sorted(right_only)}
+    if sorted(common):
         diff['='] = {}
-        for k in sorted(ck):
+        for k in sorted(common):
             if isinstance(l[k], dict):
                 diff['='][k] = compare_dict(l[k], r[k])
             else:
@@ -228,7 +226,7 @@ def compare_dict(l: Dict, r: Dict) -> Dict:
 
 def main():
     if len(sys.argv) == 1:
-        print('ldifdiff [-h] file1 file2')
+        print("""usage: ldifdiff [-h] [-o outfile] [-l] [-r] [-c] [--left-symbol <] [--right-symbol >] [--common-symbol =] [--color] files files""")
         exit(1)
 
     parser = argparse.ArgumentParser(prog="ldifdiff",
@@ -237,13 +235,20 @@ def main():
 
     parser.add_argument('-o', '--output', dest="output", metavar='outfile',
                         help='File for output by default data is written to console')
-    parser.add_argument('-a', '--added', dest="added", action='store_true',
-                        help='Show items added to right file')
-    parser.add_argument('-d', '--deleted', dest="deleted", action='store_true',
-                        help='Show items deleted from left file')
-    parser.add_argument('-e', '--equal', dest="equal", action='store_true',
-                        help='Show items that are the same in both')
-    parser.add_argument('-c', '--color', dest="color", action='store_true', help='Colorize the output')
+    parser.add_argument('-l', '--left', dest="left", action='store_true',
+                        help='Show items only in left file')
+    parser.add_argument('-r', '--right', dest="right", action='store_true',
+                        help='Show items only in right file')
+    parser.add_argument('-c', '--common', dest="common", action='store_true',
+                        help='Show items in both left and right file (equal)')
+    parser.add_argument('--left-symbol', dest="left_symbol", type=str, metavar='<', default="< ",
+                        help='Symbol to the left of the entries only in FILE1')
+    parser.add_argument('--right-symbol', dest="right_symbol", type=str, metavar='>', default="> ",
+                        help='Symbol to the left of the entries only in FILE2')
+    parser.add_argument('--common-symbol', dest="common_symbol", type=str, metavar='=', default="= ",
+                        help='Symbol to the left of the entries in both FILE1 and FILE2')
+
+    parser.add_argument('--color', dest="color", action='store_true', help='Colorize the output')
     parser.add_argument('files', nargs=2, help='Two files to compare')
 
     args = parser.parse_args()
@@ -255,13 +260,18 @@ def main():
 
     printer = ElDiffPrinter()
     printer.colors = args.color
-    if args.added or args.deleted or args.equal:
-        printer.added_display = False
-        printer.deleted_display = False
-        printer.equals_display = False
-        printer.added_display = args.added
-        printer.deleted_display = args.deleted
-        printer.equals_display = args.equal
+
+    printer.left_symbol = args.left_symbol
+    printer.right_symbol = args.right_symbol
+    printer.common_symbol = args.common_symbol
+
+    if args.left or args.right or args.common:
+        printer.left_display = False
+        printer.right_display = False
+        printer.common_display = False
+        printer.left_display = args.left
+        printer.right_display = args.right
+        printer.common_display = args.common
 
     if args.output:
         with open(args.output, 'w', encoding='utf_8_sig') as file:

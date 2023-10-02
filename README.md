@@ -25,7 +25,9 @@ pip install ldifdiff
 ### Usage
 
 ```
-usage: ldifdiff [-h] [-o outfile] [-a] [-d] [-e] [-c] files files
+usage: ldifdiff [-h] [-o outfile] [-l] [-r] [-c] [--left-symbol <]
+                [--right-symbol >] [--common-symbol =] [--color]
+                files files
 
 Tool for comparing LDIF files
 
@@ -36,8 +38,14 @@ optional arguments:
   -h, --help                    show this help message and exit
   -o outfile, --output outfile  File for output by default data is written to
                                 console
-  -a, --added                   Show items added to right file
-  -d, --deleted                 Show items deleted from left file
-  -e, --equal                   Show items that are the same in both
-  -c, --color                   Colorize the output
+  -l, --left                    Show items only in left file
+  -r, --right                   Show items only in right file
+  -c, --common                  Show items in both left and right file (equal)
+  --left-symbol <               Symbol to the left of the entries only in
+                                FILE1
+  --right-symbol >              Symbol to the left of the entries only in
+                                FILE2
+  --common-symbol =             Symbol to the left of the entries in both
+                                FILE1 and FILE2
+  --color                       Colorize the output
 ```
