@@ -32,7 +32,7 @@ usage: ldifdiff [-h] [-o outfile] [-l] [-r] [-c] [--left-symbol <]
 Tool for comparing LDIF files
 
 positional arguments:
-  files                         Two files to compare
+  files                         Files to compare FILE1 and FILE2
 
 optional arguments:
   -h, --help                    show this help message and exit

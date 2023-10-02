@@ -2,10 +2,8 @@
 import argparse
 import sys
 from typing import Dict, TextIO, List
-
 from colorama import Fore
 from ldif import LDIFParser
-
 
 class ElDiffPrinter:
     __stream: TextIO
@@ -249,7 +247,7 @@ def main():
                         help='Symbol to the left of the entries in both FILE1 and FILE2')
 
     parser.add_argument('--color', dest="color", action='store_true', help='Colorize the output')
-    parser.add_argument('files', nargs=2, help='Two files to compare')
+    parser.add_argument('files', nargs=2, help='Files to compare FILE1 and FILE2')
 
     args = parser.parse_args()
 
