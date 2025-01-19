@@ -1,5 +1,5 @@
 # Simple tool to compare LDIF files
-
+[![PyPI Downloads](https://static.pepy.tech/badge/ldifdiff)](https://pepy.tech/projects/ldifdiff)  
 This tool is used to compare two LDIF files.
 
 ### Requirements:
